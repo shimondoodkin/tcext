@@ -1,5 +1,4 @@
-tcext - Quick Extension Creation Script for Tiny Core Linux
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#tcext - Quick Extension Creation Script for Tiny Core Linux
 
 I wanted to make it easy to create extensions
 So more people will be able to do it
