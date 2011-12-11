@@ -1,0 +1,405 @@
+#!/bin/sh
+####
+# tcext - Quick Extension Creation Script for Tiny Core Linux
+#
+# i wanted to make it easy to create extensions
+# so more people will be able to do it
+# also i wanted that people will provide inside the extensions
+# a tutorial how to make an extension
+#
+# this script makes your life simpler
+# now you have time to describe your work, reread the extention info, and make more extensions
+#
+# Written by Shimon Doodkin helpmepro1@gmail.com doodkin.com
+#
+# Contributors:
+#  You here - fork and modify https://gist.github.com/1405813 (find the most recent one)
+#
+# lisence: MIT
+#
+
+PACK_DIR="$PWD" #execute this file in same  directory where you call ./configure and make
+cd $PACK_DIR;
+
+
+EDITOR="`which vi`";
+RESULT="`which nano`"; if [ $? -eq 0 ]; then  EDITOR="$RESULT"; fi # if user installed nano maybe he preferrs nano over vi
+
+write_vars_script()
+{
+### TBD:auto guess more variables, maybe suggest build string from online database
+## if you modify this and write $ or `(backquote) backslash them
+cat <<ENDOFINFO >$PACK_DIR/tcext.info
+##note: this is a shell script
+#########  edit package info:  #############
+
+PACK_APP="lighttpd"
+APP_VER="1.4.29"
+APP_WEBSITE="http://lighttpd.com"
+
+# can copy-paste(SHIFT+INS) a short overview from apps's website:
+APP_DESCRIPTION=\`cat <<EOF
+Light httpd Web server
+EOF
+\`
+
+APP_AUTHOR="lighttpd"
+APP_COPY="BSD"
+PACK_AUTHOR="you"
+#write below installation comments
+PACK_COMMENTS=\`cat <<EOF
+EOF
+\`
+
+PACK_ADD_DEPS=\`cat <<EOF
+EOF
+\`;
+#######################################
+
+#write here the build reason: , update date, log date is  MM/DD/YY
+PACK_LOG=\`cat <<EOF
+`date +%d/%m/%y` Initial Build
+EOF
+\`;
+
+#each time you build, copy a line from above to here and write above a new date and value
+PACK_LOGS=\`cat <<EOF
+EOF
+\`;
+
+PACK_WHAT_I_DID_IS=\`cat <<EOF
+Modify and delete lines here. Also delete This line
+example:
+simple ./configure and make
+example:
+i downloaded tar.gz from  www.lighttpd.net/download/
+i extraxted it
+tcext init  # typed some values
+tcext configure --without-bzip2 -with-openssl
+tcext make
+cp ./doc/config/* to ./tcfiles/etc/lighttpd
+prepered my own init script in ./tcfiles/etc/init.d/lighttpd
+tcext install
+EOF
+\`;
+
+
+ENDOFINFO
+#one more thing, create directory for addon files.
+if [ -f $PACK_DIR/tcfiles ]; then
+  mkdir $PACK_DIR/tcfiles # put in this folder configuration files and other files to copy over the /
+fi
+
+}
+
+tcext_flags()
+{
+export CFLAGS="-march=i486 -mtune=i686 -Os -pipe"
+export CXXFLAGS="-march=i486 -mtune=i686 -Os -pipe"
+export LDFLAGS="-Wl,-O1"
+}
+
+tcext_configure()
+{
+# TBD: probably better to keep the string saved somewhere
+tcext_flags
+CONFIGURE_ARGS="`echo \"$@\"|sed \"s/^$1//\"`"  #remove first argument (configure or build)
+echo "$CONFIGURE_ARGS" > $PACK_DIR/tcext.configure
+echo "`date --rfc-3339=seconds` $CONFIGURE_ARGS" >> $PACK_DIR/tcext.configure-history
+./configure $CONFIGURE_ARGS  --prefix=/usr/local
+RESULT=$?;
+if [ $RESULT -ne 0 ]; then
+echo "there was a './configure' error";
+echo "there was a './configure' error">> $PACK_DIR/tcext.configure-history;
+exit $RESULT;
+else
+echo "configure ok">> $PACK_DIR/tcext.configure-history;
+fi
+
+}
+
+tcext_make()
+{
+# TBD: probably better to keep the string saved somewhere
+tcext_flags
+make
+RESULT=$?;
+if [ $RESULT -ne 0 ]; then
+echo "there was a 'make' error">> $PACK_DIR/tcext.configure-history;
+exit $RESULT;
+else
+echo "make ok">> $PACK_DIR/tcext.configure-history;
+fi
+}
+
+ident_multiline_text()
+{
+#ident text beutifully, with little work
+TEXT=` echo "$1"  | fold -sw 55  ` #  wrap text at 55
+TEXT1=`echo "$TEXT" | head -n 1` # no need to ident the first line
+TEXT2=`echo "$TEXT" | sed 1d      | sed 's/^.*$/                \0/' ` #ident the other lines
+echo "$TEXT1\
+$TEXT2" # concat the result
+}
+
+tcext_installhalf()
+{
+
+#include the package info
+. $PACK_DIR/tcext.info
+
+rm /tmp/mark1 >/dev/null
+rm /tmp/mark2 >/dev/null
+rm /tmp/list >/dev/null
+rm -rf /tmp/pkg >/dev/null
+mkdir /tmp/pkg
+
+touch /tmp/mark1 #make a time mark in case DESTDIR fails
+make install DESTDIR=/tmp/pkg #DESTDIR may not work ... then use:
+touch /tmp/mark2 # make end time time mark
+
+#compress the installed files using a list (unknown reason)
+find /usr/local -newer /tmp/mark1 -not -newer /tmp/mark2 -not -type d > /tmp/list
+tar -T /tmp/list -czvf /tmp/$PACK_APP.tar.gz
+
+cd /tmp/pkg
+tar -xf /tmp/$PACK_APP.tar.gz # unpack (install) the extension in tmp
+
+# copy additional files
+cp  $PACK_DIR/tcfiles/* /tmp/pkg/ -r
+}
+
+tcext_deps()
+{
+#echo "looking for deps">&2
+#cd /tmp/pkg
+EXEFILES="`find . | xargs file | grep \"executable\" | grep ELF | cut -f 1 -d : 2> /dev/null; find . | xargs file | grep "shared object" | grep ELF | grep \"not stripped\" | cut -f 1 -d : 2> /dev/null;`"
+LIBS="`(
+for forfile in $EXEFILES; do
+ ldd $forfile|sed -r 's|^\s+(.+)\s+\(0x.+\)$|\1|'|sed -r 's|^(.+)\s+=>\s+(\S+)$|\2|'|sed -r 's|^(.+)\s+=>\s+$|\1|'
+done
+) | sort | uniq |grep -v 'linux-gate.so.1' |xargs realpath`"
+
+NO_PACKAGE="`echo \"$LIBS\"|awk '!/tcloop/ {print $0}'`"
+FOUND_DEPS="`echo \"$LIBS\"|xargs df|sed '/Filesystem/d'|awk '/tcloop/ {print $6}'|sed 's|/tmp/tcloop/||'| sort | uniq`"
+#[ "$NO_PACKAGE" != "" ] && echo -e "No packages found for files:\r\n$NO_PACKAGE">&2
+[ "$NO_PACKAGE" != "" ] && echo "$NO_PACKAGE">&2
+echo "$FOUND_DEPS"
+}
+
+tcext_installfinish()
+{
+. $PACK_DIR/tcext.info
+
+cd  /tmp/pkg/
+find . | xargs file | grep "executable" | grep ELF | grep "not stripped" | cut -f 1 -d : | xargs strip --strip-unneeded 2> /dev/null
+find . | xargs file | grep "shared object" | grep ELF | grep "not stripped" | cut -f 1 -d : | xargs strip -g 2> /dev/null
+
+PACK_DEPS="`tcext_deps`";
+
+[ ! -e $PACK_DIR/tcout ] && mkdir $PACK_DIR/tcout   # here you receive the result
+
+# make file list for the extension
+find | sed 's/^..//' | sed '/^\.$/d' > $PACK_DIR/tcout/$PACK_APP.tcz.list # remove first 2 chars and the dot file
+
+#make loadable file system image file
+cd /tmp
+mksquashfs pkg/ $PACK_APP.tcz
+
+#copy the result to tc out folder
+
+mv $PACK_APP.tcz $PACK_DIR/tcout/
+echo "install ok">> $PACK_DIR/tcext.configure-history;
+
+# add md5sum
+cd $PACK_DIR/tcout/
+
+md5sum $PACK_APP.tcz > $PACK_APP.tcz.md5.txt
+
+# write dependency file
+(
+echo "$PACK_ADD_DEPS"
+echo "$PACK_DEPS"
+) | sort | uniq | sed -r '/^\s*$/d' >$PACK_DIR/tcout/$PACK_APP.tcz.dep
+
+# TBD: dont know hot to do it yet
+# write dependency tree file if required
+# dependencies tree idented with spaces
+#cat <<EOT >$PACK_DIR/tcout/$PACK_APP.tcz.tree
+#EOT
+tcext_tree() ##half done TBD
+{
+tcedone="/tmp/tcedone.$$"
+touch ${tcedone}
+tcedir="$(cat /opt/.tce_dir)"
+
+depends()
+{
+   grep -v "^ *$" 2>/dev/null ${tcedir}/optional/$1.tcz.dep |
+   while read tce; do
+      tce=${tce%.tcz}
+      echo "\"${1}\" -> \"${tce}\""
+      if ! grep -q "^${tce}.tcz$" ${tcedone}; then
+         echo ${tce}.tcz >> ${tcedone}
+         depends "${tce}"
+      fi
+   done
+}
+cat  ${tcedone}
+[ -e  ${tcedone} ] && rm -f ${tcedone}
+
+}
+
+APP_SIZE=`echo \`du -chs $PACK_APP.tcz|grep total |sed s/total//\`` # echo is like trim
+
+APP_DESCRIPTION="`ident_multiline_text \"$APP_DESCRIPTION\"`"
+PACK_COMMENTS="`ident_multiline_text \"$PACK_COMMENTS\"`"
+PACK_LOG="`ident_multiline_text \"$PACK_LOG\"`"
+PACK_LOGS="`ident_multiline_text \"$PACK_LOGS\"`"
+PACK_WHAT_I_DID_IS="`ident_multiline_text \"$PACK_WHAT_I_DID_IS\"`"
+
+cat <<EOT >$PACK_DIR/tcout/$PACK_APP.tcz.info
+Title:          $PACK_APP
+Description:    $APP_DESCRIPTION
+Version:        $APP_VER
+Author:         $APP_AUTHOR
+Original-site:  $APP_WEBSITE
+Copying-policy: $APP_COPY
+Size:		$APP_SIZE
+Extension_by:   $PACK_APP
+Comments:       $PACK_COMMENTS
+
+Change-log:     $PACK_LOGS
+Current:        $PACK_LOG
+
+Configure:      $PACK_CONFIG
+What-I-did-Is:  $PACK_WHAT_I_DID_IS
+                -
+                Made with tcext https://gist.github.com/1405813
+
+EOT
+
+}
+
+tcext_submit()
+{
+echo "half done, TBD, to use some simple account from gmail"
+##more smtp reference http://www.debian-administration.org/article/Testing_SMTP_servers_with_SWAKS
+exit;
+{
+sleep 5;
+echo 'ehlo';
+sleep 3;
+echo 'MAIL FROM:<freeposter3@gmail.com>';
+sleep 3;
+echo 'RCPT TO: <kyle@test_dest.com>';
+sleep 3;
+echo 'DATA';
+sleep 3;
+echo -e 'To:kyle@testdest.com\nMIME-Version: 1.0 (mime-construct 1.9)\nContent-Type: application/zip\nContent-Transfer-Encoding: base64\n\n';
+dd if=/dev/urandom bs=4 count=10 2>/dev/null | openssl base64;
+echo '.';
+echo '.';
+sleep 3;
+echo 'quit';
+} | nc smtp.gmail.com  25
+}
+
+tcext_load()
+{
+ TCE_DIR=`cat /opt/.tce_dir`
+ cp $PACK_DIR/tcout/$PACK_APP.tcz $TCE_DIR/optional/
+ cp $PACK_DIR/tcout/$PACK_APP.tcz.md5.txt $TCE_DIR/optional/
+ cp $PACK_DIR/tcout/$PACK_APP.tcz.dep $TCE_DIR/optional/
+ tce-load $PACK_APP.tcz
+}
+
+
+case "${1}" in
+init)
+ if [ ! -f $PACK_DIR/tcext.info ]; then
+  echo 'tcext.info not found, creating it'
+  write_vars_script
+  $EDITOR tcext.info
+  echo "you can put additional files to copy over / to ./tcfiles "
+ else
+  echo "tcext.info found, editing..."
+  #echo "note: to recreate the file view the file, then  delete it, then run 'tcext init' again"
+  $EDITOR tcext.info
+ fi
+;;
+script)
+
+. $PACK_DIR/tcext.info
+
+ if [ ! -f $PACK_DIR/tcfiles/usr/local/tce.installed/$PACK_APP ]; then
+  echo "extention init script tcfiles/usr/local/tce.installed/$PACK_APP  not found, creating it"
+
+[ ! -f $PACK_DIR/tcfiles/usr/local/tce.installed ] && mkdir -p $PACK_DIR/tcfiles/usr/local/tce.installed
+
+cat <<EOF >$PACK_DIR/tcfiles/usr/local/tce.installed/$PACK_APP
+#cd /usr/local/etc/
+#[[ ! -e nano.rc ]] && cp -p nano.rcsample nano.rc
+EOF
+  $EDITOR $PACK_DIR/tcfiles/usr/local/tce.installed/$PACK_APP
+ else
+  echo "extention init script tcfiles/usr/local/tce.installed/$PACK_APP found, editing..."
+  $EDITOR $PACK_DIR/tcfiles/usr/local/tce.installed/$PACK_APP
+ fi
+;;
+flags)
+ tcext_flags
+;;
+configure)
+ tcext_configure "$@"
+;;
+make)
+ tcext_make
+;;
+deps)
+ tcext_deps
+;;
+build)
+ tcext_configure "$@"
+ tcext_make
+;;
+install)
+ if [ ! -f $PACK_DIR/tcext.info ]; then
+  $0 init
+ else
+  $EDITOR tcext.info
+ fi
+ $0 flags
+ echo 'building tcz extension'
+ tcext_installhalf
+ tcext_installfinish
+;;
+load)
+tcext_load
+;;
+submit)
+tcext_submit
+;;
+"--help")
+$0 help
+;;
+help)
+cat <<EOF
+usage:
+when no argument present, all tasks are done one after another.
+tcext init - crates tcext.info and shows an editor with the file
+tcext flags - a shorthand to exports arch 486 flags... , when you do the ./configure and make manualy
+tcext configure ARGS - does flags, and ./configure \$ARGS --prefix=/usr/local
+tcext build ARGS- does ./configure \$ARGS && tcext make
+tcext install - does make install into a /tmp/pkg folder and puts the file.tcz in ./tcout folder
+tcext installhalf - does make install into a /tmp/pkg folder and copis tcfiles/* to /tmp/pkg
+tcext installfinish - allows split into sub pagages,it packages and puts the file.tcz in ./tcout folder
+tcext help - show this message
+EOF
+;;
+*)# no arguments do all tasks
+ echo "tcext doing all tasks"
+ $0 build
+ $0 install
+;;
+esac
