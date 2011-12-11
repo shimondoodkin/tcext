@@ -24,6 +24,7 @@ tcext script - a shorthand to exports arch 486 flags... , when you do the ./conf
 tcext configure OPTIONS - does flags, and ./configure \$OPTIONS --prefix=/usr/local
 tcext make - does flags and make
 tcext install - does make install into a /tmp/pkg folder and puts the file.tcz in ./tcout folder
+
 additional:
 tcext flags - a shorthand to exports arch 486 flags... , when you do the ./configure and make manualy
 tcext build ARGS- does ./configure \$ARGS && tcext mak
@@ -31,5 +32,6 @@ tcext deps - calculate dependencies in current folder
 tcext installhalf - does make install into a /tmp/pkg folder and copis tcfiles/* to /tmp/pkg
 tcext installfinish - allows split into sub pagages,it packages and puts the file.tcz in ./tcout folder
 tcext help - show this message
+
 tbd:
 tcext submit
