@@ -33,4 +33,3 @@ tcext installfinish - allows split into sub pagages,it packages and puts the fil
 tcext help - show this message
 tbd:
 tcext submit
-```
