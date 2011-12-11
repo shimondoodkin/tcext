@@ -16,6 +16,9 @@ Contributors:
  
 Lisence: MIT
 
+put tcext file in ~/.local/bin/tcext
+make it executible 
+chmod +x ~/.local/bin/tcext
 
 usage:
 when no argument present, all tasks are done one after another.
