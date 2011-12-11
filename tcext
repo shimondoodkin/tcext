@@ -13,7 +13,7 @@
 # Written by Shimon Doodkin helpmepro1@gmail.com doodkin.com
 #
 # Contributors:
-#  You here - fork and modify https://gist.github.com/1405813 (find the most recent one)
+#  You here - fork and modify https://github.com/shimondoodkin/tcext
 #
 # lisence: MIT
 #
@@ -388,10 +388,14 @@ cat <<EOF
 usage:
 when no argument present, all tasks are done one after another.
 tcext init - crates tcext.info and shows an editor with the file
-tcext flags - a shorthand to exports arch 486 flags... , when you do the ./configure and make manualy
-tcext configure ARGS - does flags, and ./configure \$ARGS --prefix=/usr/local
-tcext build ARGS- does ./configure \$ARGS && tcext make
+tcext script - creates an init script with app's name to rename configuration
+tcext configure OPTIONS - does flags, and ./configure \$OPTIONS --prefix=/usr/local
+tcext make - does flags and make
 tcext install - does make install into a /tmp/pkg folder and puts the file.tcz in ./tcout folder
+additional:
+tcext flags - a shorthand to exports arch 486 flags... , when you do the ./configure and make manualy
+tcext build ARGS- does ./configure \$ARGS && tcext mak
+tcext deps - calculate dependencies in current folder
 tcext installhalf - does make install into a /tmp/pkg folder and copis tcfiles/* to /tmp/pkg
 tcext installfinish - allows split into sub pagages,it packages and puts the file.tcz in ./tcout folder
 tcext help - show this message
