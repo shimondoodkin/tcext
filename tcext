@@ -181,7 +181,7 @@ done
 ) | sort | uniq |grep -v 'linux-gate.so.1' |xargs realpath`"
 
 NO_PACKAGE="`echo \"$LIBS\"|awk '!/tcloop/ {print $0}'`"
-FOUND_DEPS="`echo \"$LIBS\"|xargs df|sed '/Filesystem/d'|awk '/tcloop/ {print $6}'|sed 's|/tmp/tcloop/||'| sort | uniq`"
+FOUND_DEPS="`echo \"$LIBS\"|xargs df|sed '/Filesystem/d'|awk '/tcloop/ {print $6}'|sed 's|/tmp/tcloop/||'| sort | uniq | sed 's|^.*$|\0.tcz|'`"
 #[ "$NO_PACKAGE" != "" ] && echo -e "No packages found for files:\r\n$NO_PACKAGE">&2
 [ "$NO_PACKAGE" != "" ] && echo "$NO_PACKAGE">&2
 echo "$FOUND_DEPS"
@@ -219,7 +219,7 @@ md5sum $PACK_APP.tcz > $PACK_APP.tcz.md5.txt
 # write dependency file
 (
 echo "$PACK_ADD_DEPS"
-echo "$PACK_DEPS"
+ echo "$PACK_DEPS"
 ) | sort | uniq | sed -r '/^\s*$/d' >$PACK_DIR/tcout/$PACK_APP.tcz.dep
 
 # TBD: dont know hot to do it yet
@@ -307,16 +307,57 @@ echo 'quit';
 
 tcext_load()
 {
+ . $PACK_DIR/tcext.info
  TCE_DIR=`cat /opt/.tce_dir`
- cp $PACK_DIR/tcout/$PACK_APP.tcz $TCE_DIR/optional/
- cp $PACK_DIR/tcout/$PACK_APP.tcz.md5.txt $TCE_DIR/optional/
- cp $PACK_DIR/tcout/$PACK_APP.tcz.dep $TCE_DIR/optional/
- tce-load $PACK_APP.tcz
+ cp -f $PACK_DIR/tcout/$PACK_APP.tcz $TCE_DIR/optional/
+ cp -f $PACK_DIR/tcout/$PACK_APP.tcz.md5.txt $TCE_DIR/optional/
+ cp -f $PACK_DIR/tcout/$PACK_APP.tcz.dep $TCE_DIR/optional/
+ tce-load -i $PACK_APP.tcz
+}
+
+tcext_unload()
+{
+# Copyright 2011 Marco Caminati. Released under GPLv3.
+# Pass any content to $keepdir to prevent deleting the directories emptied in the process
+set -e
+set -u
+set -x
+
+# To speed up script, I assumed that: 
+# 1) tce-load -i links each /tmp/tcloop/filepath to /filepath
+# 2) there is no path in an extension containing " character
+# 3) No abmnormously long paths in extension (xargs -n 100 places a very high, but finite, limit on it). Oddly, the increase in execution time got setting -n 1 is unexpectedly low, about +10% (on a very big tcz).
+
+b=busybox
+name=`$b echo "$1" | $b sed -e 's_/*$__' | $b egrep -o "[^/]*$"`
+mntdir=/tmp/tcloop/$name
+keepdir="${keepdir:-}"
+mntlist="/proc/mounts"
+echo $mntdir | grep -q ! && exit 6
+loopdev="$(egrep "${mntdir}" "${mntlist}" | sed "s_\(.*\) squashfs .*\$_\1_" | egrep "${mntdir} *$" | cut -f 1 -d ' ')"
+squashfile="$($b losetup | egrep "^ *${loopdev} *:" | cut -f 3- -d " ")"
+[ -s "${squashfile}" ] || exit 2
+$b umount "${mntdir}" || exit 3
+sudo $b mount "${squashfile}" "${mntdir}" -t squashfs -o loop,ro,bs=4096 || exit 4 
+# Error 4 is big trouble!
+cd "${mntdir}"
+find ! -type d | cut -f 2- -d . | sed 's_.*_"&"_'| xargs -r -n 100 $b ls -l | grep -o -- "-> ${mntdir}/.*$"| sed "s_^-> ${mntdir}\(.*$\)_\"\1\"_" | sudo $b xargs -r -n 100 rm
+[ "$keepdir" ] || $b find -type d | $b cut -f 2- -d . | $b sed = | $b sed 'N;s/\n/ /' | $b sort -nr | $b cut -f 2- -d " " | $b sed 's/.*/"&"/'| sudo $b xargs -r -n 100 rmdir -p || true
+#sort -nr is due to the way rmdir -p works
+cd ..
+$b umount -d "${mntdir}" || exit 5
+cd /usr/local/tce.installed || exit 2
+$b find -maxdepth 1 -size +0c | $b egrep -q "${name}" && exit 7
+# Debugline for inner consistency check
+$b rm "${name}" || true
+$b rmdir "${mntdir}"
+
 }
 
 
 case "${1}" in
 init)
+. $PACK_DIR/tcext.info
  if [ ! -f $PACK_DIR/tcext.info ]; then
   echo 'tcext.info not found, creating it'
   write_vars_script
@@ -329,7 +370,6 @@ init)
  fi
 ;;
 script)
-
 . $PACK_DIR/tcext.info
 
  if [ ! -f $PACK_DIR/tcfiles/usr/local/tce.installed/$PACK_APP ]; then
@@ -338,32 +378,54 @@ script)
 [ ! -f $PACK_DIR/tcfiles/usr/local/tce.installed ] && mkdir -p $PACK_DIR/tcfiles/usr/local/tce.installed
 
 cat <<EOF >$PACK_DIR/tcfiles/usr/local/tce.installed/$PACK_APP
-#cd /usr/local/etc/
-#[[ ! -e nano.rc ]] && cp -p nano.rcsample nano.rc
+#!/bin/sh
+#[ ! -e /etc/lighttpd ] && cp -rp /etc/lighttpd.sample /etc/lighttpd
 EOF
   $EDITOR $PACK_DIR/tcfiles/usr/local/tce.installed/$PACK_APP
  else
   echo "extention init script tcfiles/usr/local/tce.installed/$PACK_APP found, editing..."
   $EDITOR $PACK_DIR/tcfiles/usr/local/tce.installed/$PACK_APP
  fi
+sudo chown root:staff $PACK_DIR/tcfiles/usr/local/tce.installed/$PACK_APP
+sudo chmod +x $PACK_DIR/tcfiles/usr/local/tce.installed/$PACK_APP
 ;;
 flags)
+. $PACK_DIR/tcext.info
  tcext_flags
 ;;
 configure)
+. $PACK_DIR/tcext.info
  tcext_configure "$@"
 ;;
 make)
+. $PACK_DIR/tcext.info
  tcext_make
 ;;
 deps)
  tcext_deps
 ;;
 build)
+. $PACK_DIR/tcext.info
  tcext_configure "$@"
  tcext_make
 ;;
+installhalf)
+. $PACK_DIR/tcext.info
+ if [ ! -f $PACK_DIR/tcext.info ]; then
+  $0 init
+ else
+  $EDITOR tcext.info
+ fi
+ $0 flags
+ echo 'building tcz extension'
+ tcext_installhalf
+;;
+installfinish)
+. $PACK_DIR/tcext.info
+ tcext_installfinish
+;;
 install)
+. $PACK_DIR/tcext.info
  if [ ! -f $PACK_DIR/tcext.info ]; then
   $0 init
  else
@@ -374,11 +436,42 @@ install)
  tcext_installhalf
  tcext_installfinish
 ;;
+unload)
+. $PACK_DIR/tcext.info
+tcext_unload "$PACK_APP"
+;;
 load)
+. $PACK_DIR/tcext.info
 tcext_load
 ;;
 submit)
+. $PACK_DIR/tcext.info
 tcext_submit
+;;
+tools)
+TCE_DIR=`cat /opt/.tce_dir`
+
+[ -e $TCE_DIR/optional/compiletc.tcz ] && tce-load -i compiletc.tcz
+[ ! -e $TCE_DIR/optional/compiletc.tcz ] && tce-load -w -i compiletc.tcz
+
+[ -e $TCE_DIR/optional/python.tcz ] && tce-load -i python.tcz
+[ ! -e $TCE_DIR/optional/python.tcz ] && tce-load -w -i python.tcz
+
+[ -e $TCE_DIR/optional/openssl-1.0.0-dev.tcz ] && tce-load -i openssl-1.0.0-dev.tcz
+[ ! -e $TCE_DIR/optional/openssl-1.0.0-dev.tcz ] && tce-load -w -i openssl-1.0.0-dev.tcz
+
+[ -e $TCE_DIR/optional/squashfs-tools-4.x.tcz ] && tce-load -i squashfs-tools-4.x.tcz
+[ ! -e $TCE_DIR/optional/squashfs-tools-4.x.tcz ] && tce-load -w -i squashfs-tools-4.x.tcz
+
+[ -e $TCE_DIR/optional/strace.tcz ] tce-load -i strace.tcz
+[ ! -e $TCE_DIR/optional/strace.tcz ] tce-load -w -i strace.tcz
+
+[ -e $TCE_DIR/optional/pcre-dev.tcz ] tce-load -i pcre-dev.tcz
+[ ! -e $TCE_DIR/optional/pcre-dev.tcz ] tce-load -w -i pcre-dev.tcz
+
+[ -e $TCE_DIR/optional/libtool.tcz ] tce-load -i libtool.tcz
+[ ! -e $TCE_DIR/optional/libtool.tcz ] tce-load -w -i libtool.tcz
+
 ;;
 "--help")
 $0 help
@@ -386,7 +479,8 @@ $0 help
 help)
 cat <<EOF
 usage:
-when no argument present, all tasks are done one after another.
+tcext all - all tasks are done one after another.
+tcext tools - tce-load compiletc and squashfs-tools and other development tools
 tcext init - crates tcext.info and shows an editor with the file
 tcext script - creates an init script with app's name to rename configuration
 tcext configure OPTIONS - does flags, and ./configure \$OPTIONS --prefix=/usr/local
@@ -401,9 +495,13 @@ tcext installfinish - allows split into sub pagages,it packages and puts the fil
 tcext help - show this message
 EOF
 ;;
-*)# no arguments do all tasks
+all)
  echo "tcext doing all tasks"
+. $PACK_DIR/tcext.info
  $0 build
  $0 install
+;;
+*)# no arguments do all tasks
+$0 help
 ;;
 esac
