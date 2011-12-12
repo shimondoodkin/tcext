@@ -23,7 +23,7 @@ cd $PACK_DIR;
 
 
 EDITOR="`which vi`";
-RESULT="`which nano`"; if [ $? -eq 0 ]; then  EDITOR="$RESULT"; fi # if user installed nano maybe he preferrs nano over vi
+RESULT="`which nano`"; if [ $? -eq 0 ]; then  EDITOR="$RESULT -w "; fi # if user installed nano maybe he preferrs nano over vi
 
 write_vars_script()
 {
@@ -158,15 +158,17 @@ touch /tmp/mark1 #make a time mark in case DESTDIR fails
 make install DESTDIR=/tmp/pkg #DESTDIR may not work ... then use:
 touch /tmp/mark2 # make end time time mark
 
-#compress the installed files using a list (unknown reason)
+#tar is used to copy files by filenames without directories (it creates directories automatically)
+if [ "`ls /tmp/pkg/`" == "" ] ; then
 find /usr/local -newer /tmp/mark1 -not -newer /tmp/mark2 -not -type d > /tmp/list
 tar -T /tmp/list -czvf /tmp/$PACK_APP.tar.gz
-
 cd /tmp/pkg
 tar -xf /tmp/$PACK_APP.tar.gz # unpack (install) the extension in tmp
+fi
 
 # copy additional files
 cp  $PACK_DIR/tcfiles/* /tmp/pkg/ -r
+
 }
 
 tcext_deps()
@@ -195,6 +197,9 @@ cd  /tmp/pkg/
 find . | xargs file | grep "executable" | grep ELF | grep "not stripped" | cut -f 1 -d : | xargs strip --strip-unneeded 2> /dev/null
 find . | xargs file | grep "shared object" | grep ELF | grep "not stripped" | cut -f 1 -d : | xargs strip -g 2> /dev/null
 
+sudo chmod +x /tmp/pkg/usr/local/tce.installed/$PACK_APP
+sudo chown root:staff /tmp/pkg/usr/local/tce.installed/$PACK_APP
+
 PACK_DEPS="`tcext_deps`";
 
 [ ! -e $PACK_DIR/tcout ] && mkdir $PACK_DIR/tcout   # here you receive the result
@@ -205,6 +210,8 @@ find | sed 's/^..//' | sed '/^\.$/d' > $PACK_DIR/tcout/$PACK_APP.tcz.list # remo
 #make loadable file system image file
 cd /tmp
 mksquashfs pkg/ $PACK_APP.tcz
+
+sudo chown tc:staff /tmp/pkg/usr/local/tce.installed/$PACK_APP
 
 #copy the result to tc out folder
 
@@ -377,17 +384,22 @@ script)
 
 [ ! -f $PACK_DIR/tcfiles/usr/local/tce.installed ] && mkdir -p $PACK_DIR/tcfiles/usr/local/tce.installed
 
+## backslash ` and $ and \
 cat <<EOF >$PACK_DIR/tcfiles/usr/local/tce.installed/$PACK_APP
 #!/bin/sh
-#[ ! -e /etc/lighttpd ] && cp -rp /etc/lighttpd.sample /etc/lighttpd
+#
+##copy a file not as symlink:
+#[ ! -e /etc/lighttpd ] && cp -p /etc/lighttpd.sample /etc/lighttpd
+#
+##copy directory not as  sym links:
+#[ ! -e /etc/lighttpd ] && (mkdir /etc/lighttpd; cd /etc/lighttpd.sample; tar -hpcf - .|tar -xpf - -C /etc/lighttpd)
 EOF
   $EDITOR $PACK_DIR/tcfiles/usr/local/tce.installed/$PACK_APP
+  chmod +x $PACK_DIR/tcfiles/usr/local/tce.installed/$PACK_APP
  else
   echo "extention init script tcfiles/usr/local/tce.installed/$PACK_APP found, editing..."
   $EDITOR $PACK_DIR/tcfiles/usr/local/tce.installed/$PACK_APP
  fi
-sudo chown root:staff $PACK_DIR/tcfiles/usr/local/tce.installed/$PACK_APP
-sudo chmod +x $PACK_DIR/tcfiles/usr/local/tce.installed/$PACK_APP
 ;;
 flags)
 . $PACK_DIR/tcext.info
