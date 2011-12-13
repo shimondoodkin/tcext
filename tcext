@@ -51,6 +51,7 @@ PACK_COMMENTS=\`cat <<EOF
 EOF
 \`
 
+#deps are calculated automatically, you can add more here
 PACK_ADD_DEPS=\`cat <<EOF
 EOF
 \`;
@@ -104,7 +105,6 @@ tcext_configure()
 # TBD: probably better to keep the string saved somewhere
 tcext_flags
 CONFIGURE_ARGS="`echo \"$@\"|sed \"s/^$1//\"`"  #remove first argument (configure or build)
-echo "$CONFIGURE_ARGS" > $PACK_DIR/tcext.configure
 echo "`date --rfc-3339=seconds` $CONFIGURE_ARGS" >> $PACK_DIR/tcext.configure-history
 ./configure $CONFIGURE_ARGS  --prefix=/usr/local
 RESULT=$?;
@@ -113,6 +113,7 @@ echo "there was a './configure' error";
 echo "there was a './configure' error">> $PACK_DIR/tcext.configure-history;
 exit $RESULT;
 else
+echo "$CONFIGURE_ARGS" > $PACK_DIR/tcext.configure
 echo "configure ok">> $PACK_DIR/tcext.configure-history;
 fi
 
@@ -166,6 +167,10 @@ cd /tmp/pkg
 tar -xf /tmp/$PACK_APP.tar.gz # unpack (install) the extension in tmp
 fi
 
+if [ "`find $PACK_DIR/tcfiles/etc/init.d/ -type f -perm -og+rx`" == "" ] ; then
+ echo "please notice: there are non executable files in ./tcfiles/etc/init.d/..."
+fi
+
 # copy additional files
 cp  $PACK_DIR/tcfiles/* /tmp/pkg/ -r
 
@@ -198,7 +203,7 @@ find . | xargs file | grep "executable" | grep ELF | grep "not stripped" | cut -
 find . | xargs file | grep "shared object" | grep ELF | grep "not stripped" | cut -f 1 -d : | xargs strip -g 2> /dev/null
 
 sudo chmod +x /tmp/pkg/usr/local/tce.installed/$PACK_APP
-sudo chown root:staff /tmp/pkg/usr/local/tce.installed/$PACK_APP
+sudo chown root:staff /tmp/pkg/usr/local/tce.installed/$PACK_APP #there is a recomendation to make this script owned by root, i dont see a need in this, but folowed it anyways
 
 PACK_DEPS="`tcext_deps`";
 
@@ -211,7 +216,7 @@ find | sed 's/^..//' | sed '/^\.$/d' > $PACK_DIR/tcout/$PACK_APP.tcz.list # remo
 cd /tmp
 mksquashfs pkg/ $PACK_APP.tcz
 
-sudo chown tc:staff /tmp/pkg/usr/local/tce.installed/$PACK_APP
+sudo chown tc:staff /tmp/pkg/usr/local/tce.installed/$PACK_APP #undo owned by root to prevent silly deletition problems
 
 #copy the result to tc out folder
 
@@ -328,7 +333,7 @@ tcext_unload()
 # Pass any content to $keepdir to prevent deleting the directories emptied in the process
 set -e
 set -u
-set -x
+#set -x
 
 # To speed up script, I assumed that: 
 # 1) tce-load -i links each /tmp/tcloop/filepath to /filepath
@@ -350,21 +355,21 @@ sudo $b mount "${squashfile}" "${mntdir}" -t squashfs -o loop,ro,bs=4096 || exit
 cd "${mntdir}"
 find ! -type d | cut -f 2- -d . | sed 's_.*_"&"_'| xargs -r -n 100 $b ls -l | grep -o -- "-> ${mntdir}/.*$"| sed "s_^-> ${mntdir}\(.*$\)_\"\1\"_" | sudo $b xargs -r -n 100 rm
 [ "$keepdir" ] || $b find -type d | $b cut -f 2- -d . | $b sed = | $b sed 'N;s/\n/ /' | $b sort -nr | $b cut -f 2- -d " " | $b sed 's/.*/"&"/'| sudo $b xargs -r -n 100 rmdir -p || true
+# |grep -v "Directory not empty" |grep -v "No such file or directory"
 #sort -nr is due to the way rmdir -p works
 cd ..
 $b umount -d "${mntdir}" || exit 5
 cd /usr/local/tce.installed || exit 2
 $b find -maxdepth 1 -size +0c | $b egrep -q "${name}" && exit 7
 # Debugline for inner consistency check
-$b rm "${name}" || true
-$b rmdir "${mntdir}"
+$b rm "${name}" || true # |grep -v "No such file or directory"
+$b rmdir "${mntdir}" # |grep -v "Directory not empty" 
 
 }
 
 
 case "${1}" in
 init)
-. $PACK_DIR/tcext.info
  if [ ! -f $PACK_DIR/tcext.info ]; then
   echo 'tcext.info not found, creating it'
   write_vars_script
@@ -475,14 +480,17 @@ TCE_DIR=`cat /opt/.tce_dir`
 [ -e $TCE_DIR/optional/squashfs-tools-4.x.tcz ] && tce-load -i squashfs-tools-4.x.tcz
 [ ! -e $TCE_DIR/optional/squashfs-tools-4.x.tcz ] && tce-load -w -i squashfs-tools-4.x.tcz
 
-[ -e $TCE_DIR/optional/strace.tcz ] tce-load -i strace.tcz
-[ ! -e $TCE_DIR/optional/strace.tcz ] tce-load -w -i strace.tcz
+[ -e $TCE_DIR/optional/strace.tcz ] && tce-load -i strace.tcz
+[ ! -e $TCE_DIR/optional/strace.tcz ] && tce-load -w -i strace.tcz
 
-[ -e $TCE_DIR/optional/pcre-dev.tcz ] tce-load -i pcre-dev.tcz
-[ ! -e $TCE_DIR/optional/pcre-dev.tcz ] tce-load -w -i pcre-dev.tcz
+[ -e $TCE_DIR/optional/pcre-dev.tcz ] && tce-load -i pcre-dev.tcz
+[ ! -e $TCE_DIR/optional/pcre-dev.tcz ] && tce-load -w -i pcre-dev.tcz
 
-[ -e $TCE_DIR/optional/libtool.tcz ] tce-load -i libtool.tcz
-[ ! -e $TCE_DIR/optional/libtool.tcz ] tce-load -w -i libtool.tcz
+[ -e $TCE_DIR/optional/libtool.tcz ] && tce-load -i libtool.tcz
+[ ! -e $TCE_DIR/optional/libtool.tcz ] && tce-load -w -i libtool.tcz
+
+[ -e $TCE_DIR/optional/pkg-config.tcz ] && tce-load -i pkg-config.tcz
+[ ! -e $TCE_DIR/optional/pkg-config.tcz ] && tce-load -w -i pkg-config.tcz
 
 ;;
 "--help")
@@ -503,9 +511,24 @@ tcext flags - a shorthand to exports arch 486 flags... , when you do the ./confi
 tcext build ARGS- does ./configure \$ARGS && tcext mak
 tcext deps - calculate dependencies in current folder
 tcext installhalf - does make install into a /tmp/pkg folder and copis tcfiles/* to /tmp/pkg
-tcext installfinish - allows split into sub pagages,it packages and puts the file.tcz in ./tcout folder
+tcext installfinish - allows split into sub pagages, it packages and puts the file.tcz in ./tcout folder
+tcext reload - copies tcfiles/* to /tmp/pkg, does installfinish, does unload, does load
 tcext help - show this message
 EOF
+;;
+reload)
+. $PACK_DIR/tcext.info
+
+ if [ "`find $PACK_DIR/tcfiles/etc/init.d/ -type f -perm -og+rx`" == "" ] ; then
+  echo "please notice: there are non executable files in ./tcfiles/etc/init.d/..."
+ fi
+ # copy additional files
+ cp  $PACK_DIR/tcfiles/* /tmp/pkg/ -r
+ 
+ $0 installfinish
+ $0 unload
+ $0 load
+
 ;;
 all)
  echo "tcext doing all tasks"
