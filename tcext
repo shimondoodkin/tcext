@@ -34,8 +34,8 @@ APP="`echo \"$PWD\"|sed -r 's|^.*/(.+)-(.+)\$|\\1|'`"
 APPVER="`echo \"$PWD\"|sed -r 's|^.*/(.+)-(.+)\$|\\2|'`"
 [ "$APPVER" == "" ] && APPVER="1.4.29"
 
-WEBSITE="`cat README*|grep -i project|grep 'http://'|head -n 1|sed -r 's|^.*(http://[a-zA-Z./]+).*\$|\\1|'`"
-[ "$WEBSITE" == "" ] && WEBSITE="`cat README*|grep 'http://'|head -n 1|sed -r 's|^.*(http://[a-zA-Z./]+).*\$|\\1|'`"
+WEBSITE="`cat README*|grep -i project|grep -v /rfc/|grep 'http://'|head -n 1|sed -r 's|^.*(http://[a-zA-Z./]+).*\$|\\1|'`"
+[ "$WEBSITE" == "" ] && WEBSITE="`cat README*|grep -v /rfc/ |grep 'http://'|head -n 1|sed -r 's|^.*(http://[a-zA-Z./]+).*\$|\\1|'`"
 [ "$WEBSITE" == "" ] && WEBSITE="http://lighttpd.com"
 
 
@@ -341,7 +341,6 @@ echo 'quit';
 
 tcext_load()
 {
- . $PACK_DIR/tcext.info
  TCE_DIR=`cat /opt/.tce_dir`
  cp -f $PACK_DIR/tcout/$PACK_APP.tcz $TCE_DIR/optional/
  cp -f $PACK_DIR/tcout/$PACK_APP.tcz.md5.txt $TCE_DIR/optional/
@@ -488,6 +487,7 @@ install)
  -not -iname '*.la' \
  -not -iname '*.h' \
  -not -iname '*.c' \
+ -not -ipath '*/aclocal/*' \
  -not -ipath '*/pkgconfig/*' \
  -not -ipath '*/man/*' \
  -not -ipath '*/doc/*' \
@@ -515,13 +515,14 @@ PACK_APP="${PACK_APP}-dev"
  [ ! -e /tmp/${PACK_APP}.tar.gz ] && rm -f /tmp/${PACK_APP}.tar.gz
  [ ! -e /tmp/list ] && rm -f /tmp/list
  cd /tmp/pkg
- find -not -type d \
- -ipath '*/include/*' \
- -iname '*.a' \
- -iname '*.la' \
- -iname '*.h' \
- -iname '*.c' \
- -ipath '*/pkgconfig/*' > /tmp/list
+ find -not -type d \( \
+     -ipath '*/include/*' \
+ -or -iname '*.a' \
+ -or -iname '*.la' \
+ -or -iname '*.h' \
+ -or -iname '*.c' \
+ -or -ipath '*/aclocal/*' \
+ -or -ipath '*/pkgconfig/*' \) > /tmp/list
  tar -T /tmp/list -cpzvf /tmp/${PACK_APP}.tar.gz
  cd /tmp
  rm -rf /tmp/pkg
@@ -542,13 +543,13 @@ PACK_APP="${PACK_APP}-docs"
  [ ! -e /tmp/${PACK_APP}.tar.gz ] && rm -f /tmp/${PACK_APP}.tar.gz
  [ ! -e /tmp/list ] && rm -f /tmp/list
  cd /tmp/pkg
- find -not -type d \
- -ipath '*/man/*' \
- -ipath '*/doc/*' \
- -ipath '*/docs/*' \
- -iname 'README*' \
- -iname 'INSTALL*' \
- -iname '*.html' > /tmp/list
+ find -not -type d \( \
+     -ipath '*/man/*' \
+ -or -ipath '*/doc/*' \
+ -or -ipath '*/docs/*' \
+ -or -iname 'README*' \
+ -or -iname 'INSTALL*' \
+ -or -iname '*.html' \) > /tmp/list
  tar -T /tmp/list -cpzvf /tmp/${PACK_APP}.tar.gz
  rm -rf /tmp/pkg
  mkdir /tmp/pkg
@@ -582,6 +583,7 @@ tce-load -wi pcre-dev
 tce-load -wi libtool
 tce-load -wi pkg-config
 tce-load -wi autoconf
+tce-load -wi automake
 
 ;;
 "--help")
@@ -648,15 +650,15 @@ PACK_APP="${PACK_APP}-docs"
  tcext_unload "$PACK_APP"
  tcext_load
 ;;
-unloaddev)
- require_info
-PACK_APP="${PACK_APP}-dev"
- tcext_unload "$PACK_APP"
-;;
 loaddev)
  require_info
 PACK_APP="${PACK_APP}-dev"
  tcext_load
+;;
+unloaddev)
+ require_info
+PACK_APP="${PACK_APP}-dev"
+ tcext_unload "$PACK_APP"
 ;;
 reloaddev)
  require_info
