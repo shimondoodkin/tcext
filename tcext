@@ -27,15 +27,27 @@ RESULT="`which nano`"; if [ $? -eq 0 ]; then  EDITOR="$RESULT -w "; fi # if user
 
 write_vars_script()
 {
+
+APP="`echo \"$PWD\"|sed -r 's|^.*/(.+)-(.+)\$|\\1|'`"
+[ "$APP" == "" ] && APP="lighttpd"
+
+APPVER="`echo \"$PWD\"|sed -r 's|^.*/(.+)-(.+)\$|\\2|'`"
+[ "$APPVER" == "" ] && APPVER="1.4.29"
+
+WEBSITE="`cat README*|grep -i project|grep 'http://'|head -n 1|sed -r 's|^.*(http://[a-zA-Z./]+).*\$|\\1|'`"
+[ "$WEBSITE" == "" ] && WEBSITE="`cat README*|grep 'http://'|head -n 1|sed -r 's|^.*(http://[a-zA-Z./]+).*\$|\\1|'`"
+[ "$WEBSITE" == "" ] && WEBSITE="http://lighttpd.com"
+
+
 ### TBD:auto guess more variables, maybe suggest build string from online database
 ## if you modify this and write $ or `(backquote) backslash them
 cat <<ENDOFINFO >$PACK_DIR/tcext.info
 ##note: this is a shell script
 #########  edit package info:  #############
 
-PACK_APP="lighttpd"
-APP_VER="1.4.29"
-APP_WEBSITE="http://lighttpd.com"
+PACK_APP="$APP"
+APP_VER="$APPVER"
+APP_WEBSITE="$WEBSITE"
 
 # can copy-paste(SHIFT+INS) a short overview from apps's website:
 APP_DESCRIPTION=\`cat <<EOF
@@ -143,16 +155,26 @@ echo "$TEXT1\
 $TEXT2" # concat the result
 }
 
-tcext_installhalf()
+copy_additional_files()
+{
+ if [ "`find $PACK_DIR/tcfiles/etc/init.d/ -type f -perm -og+rx`" == "" ] ; then
+  echo "please notice: there are non executable files in ./tcfiles/etc/init.d/..."
+ fi
+ # copy additional files
+ cp  $PACK_DIR/tcfiles/* /tmp/pkg/ -r
+}
+
+tcext_installtemp()
 {
 
 #include the package info
-. $PACK_DIR/tcext.info
+#. $PACK_DIR/tcext.info
 
-rm /tmp/mark1 >/dev/null
-rm /tmp/mark2 >/dev/null
-rm /tmp/list >/dev/null
-rm -rf /tmp/pkg >/dev/null
+[ -e /tmp/mark1 ] && rm /tmp/mark1
+[ -e /tmp/mark2 ] && rm /tmp/mark2
+[ -e /tmp/list ] && rm /tmp/list
+[ -e /tmp/pkg ] && rm -rf /tmp/pkg
+
 mkdir /tmp/pkg
 
 touch /tmp/mark1 #make a time mark in case DESTDIR fails
@@ -167,42 +189,41 @@ cd /tmp/pkg
 tar -xf /tmp/$PACK_APP.tar.gz # unpack (install) the extension in tmp
 fi
 
-if [ "`find $PACK_DIR/tcfiles/etc/init.d/ -type f -perm -og+rx`" == "" ] ; then
- echo "please notice: there are non executable files in ./tcfiles/etc/init.d/..."
-fi
-
-# copy additional files
-cp  $PACK_DIR/tcfiles/* /tmp/pkg/ -r
-
+copy_additional_files
 }
 
 tcext_deps()
 {
-#echo "looking for deps">&2
+echo "looking for deps">&2
 #cd /tmp/pkg
 EXEFILES="`find . | xargs file | grep \"executable\" | grep ELF | cut -f 1 -d : 2> /dev/null; find . | xargs file | grep "shared object" | grep ELF | grep \"not stripped\" | cut -f 1 -d : 2> /dev/null;`"
 LIBS="`(
 for forfile in $EXEFILES; do
- ldd $forfile|sed -r 's|^\s+(.+)\s+\(0x.+\)$|\1|'|sed -r 's|^(.+)\s+=>\s+(\S+)$|\2|'|sed -r 's|^(.+)\s+=>\s+$|\1|'
+ ldd $forfile|sed -r 's|^\s*(.+)\s+\(0x.+\)$|\1|' \
+ |sed -r 's|^\s*(.+)\s+=>\s+(\S+)$|\2|' \
+ |sed -r "s|^\s*(.+)\\s+=>\\s+not found\$|not found: $forfile => \\1|" \
+ |sed -r 's|^\s*(.+)\s+=>\s+$|\1|'
 done
-) | sort | uniq |grep -v 'linux-gate.so.1' |xargs realpath`"
-
-NO_PACKAGE="`echo \"$LIBS\"|awk '!/tcloop/ {print $0}'`"
+) | sort | uniq |grep -v 'linux-gate.so.1' `"
+echo "$LIBS" |grep "not found" >&2
+LIBS="`echo \"$LIBS\" |grep -v \"not found\" |xargs realpath`"
+NO_PACKAGE="`echo \"$LIBS\"|awk '!/tcloop/ {print \"no package: \" $0}'`"
 FOUND_DEPS="`echo \"$LIBS\"|xargs df|sed '/Filesystem/d'|awk '/tcloop/ {print $6}'|sed 's|/tmp/tcloop/||'| sort | uniq | sed 's|^.*$|\0.tcz|'`"
 #[ "$NO_PACKAGE" != "" ] && echo -e "No packages found for files:\r\n$NO_PACKAGE">&2
 [ "$NO_PACKAGE" != "" ] && echo "$NO_PACKAGE">&2
 echo "$FOUND_DEPS"
 }
 
-tcext_installfinish()
+tcext_packtemp()
 {
-. $PACK_DIR/tcext.info
+#. $PACK_DIR/tcext.info
 
 cd  /tmp/pkg/
 find . | xargs file | grep "executable" | grep ELF | grep "not stripped" | cut -f 1 -d : | xargs strip --strip-unneeded 2> /dev/null
 find . | xargs file | grep "shared object" | grep ELF | grep "not stripped" | cut -f 1 -d : | xargs strip -g 2> /dev/null
 
-sudo chmod +x /tmp/pkg/usr/local/tce.installed/$PACK_APP
+[ ! -e /tmp/pkg/usr/local/tce.installed/$PACK_APP ] && \
+sudo chmod +x /tmp/pkg/usr/local/tce.installed/$PACK_APP && \
 sudo chown root:staff /tmp/pkg/usr/local/tce.installed/$PACK_APP #there is a recomendation to make this script owned by root, i dont see a need in this, but folowed it anyways
 
 PACK_DEPS="`tcext_deps`";
@@ -216,6 +237,7 @@ find | sed 's/^..//' | sed '/^\.$/d' > $PACK_DIR/tcout/$PACK_APP.tcz.list # remo
 cd /tmp
 mksquashfs pkg/ $PACK_APP.tcz
 
+[ ! -e /tmp/pkg/usr/local/tce.installed/$PACK_APP ] && \
 sudo chown tc:staff /tmp/pkg/usr/local/tce.installed/$PACK_APP #undo owned by root to prevent silly deletition problems
 
 #copy the result to tc out folder
@@ -367,23 +389,8 @@ $b rmdir "${mntdir}" # |grep -v "Directory not empty"
 
 }
 
-
-case "${1}" in
-init)
- if [ ! -f $PACK_DIR/tcext.info ]; then
-  echo 'tcext.info not found, creating it'
-  write_vars_script
-  $EDITOR tcext.info
-  echo "you can put additional files to copy over / to ./tcfiles "
- else
-  echo "tcext.info found, editing..."
-  #echo "note: to recreate the file view the file, then  delete it, then run 'tcext init' again"
-  $EDITOR tcext.info
- fi
-;;
-script)
-. $PACK_DIR/tcext.info
-
+create_init_script()
+{
  if [ ! -f $PACK_DIR/tcfiles/usr/local/tce.installed/$PACK_APP ]; then
   echo "extention init script tcfiles/usr/local/tce.installed/$PACK_APP  not found, creating it"
 
@@ -405,92 +412,182 @@ EOF
   echo "extention init script tcfiles/usr/local/tce.installed/$PACK_APP found, editing..."
   $EDITOR $PACK_DIR/tcfiles/usr/local/tce.installed/$PACK_APP
  fi
+}
+
+require_info()
+{
+EDIT=$1
+ if [ ! -f $PACK_DIR/tcext.info ]; then
+  echo 'tcext.info not found, creating it'
+  write_vars_script
+  $EDITOR tcext.info
+  echo "you can put additional files to copy over / to ./tcfiles "
+ elif [ "$EDIT" == "1" ]; then
+  echo "tcext.info found, editing..."
+  #echo "note: to recreate the file view the file, then  delete it, then run 'tcext init' again"
+  $EDITOR tcext.info
+ fi
+. $PACK_DIR/tcext.info
+}
+
+case "${1}" in
+init)
+require_info 1
+;;
+info)
+require_info 1
+;;
+script)
+require_info
+create_init_script
 ;;
 flags)
 . $PACK_DIR/tcext.info
  tcext_flags
 ;;
 configure)
-. $PACK_DIR/tcext.info
+require_info
+ $0 flags
  tcext_configure "$@"
 ;;
 make)
-. $PACK_DIR/tcext.info
+ . $PACK_DIR/tcext.info
  tcext_make
 ;;
 deps)
  tcext_deps
 ;;
-build)
-. $PACK_DIR/tcext.info
- tcext_configure "$@"
- tcext_make
-;;
-installhalf)
-. $PACK_DIR/tcext.info
- if [ ! -f $PACK_DIR/tcext.info ]; then
-  $0 init
- else
-  $EDITOR tcext.info
- fi
+#build)
+# require_info
+# tcext_configure "$@"
+# tcext_make
+# tcext_packtemp
+# tcext_installtemp
+#;;
+installtemp)
+ require_info
  $0 flags
  echo 'building tcz extension'
- tcext_installhalf
+ tcext_installtemp
 ;;
-installfinish)
-. $PACK_DIR/tcext.info
- tcext_installfinish
+packtemp)
+ require_info
+ tcext_packtemp
 ;;
 install)
-. $PACK_DIR/tcext.info
- if [ ! -f $PACK_DIR/tcext.info ]; then
-  $0 init
- else
-  $EDITOR tcext.info
- fi
+ require_info
  $0 flags
  echo 'building tcz extension'
- tcext_installhalf
- tcext_installfinish
+ tcext_installtemp
+ [ ! -e /tmp/${PACK_APP}.tar.gz ] && rm -f /tmp/${PACK_APP}.tar.gz
+ [ ! -e /tmp/list ] && rm -f /tmp/list
+ cd /tmp/pkg
+ find -not -type d \
+ -not -ipath '*/include/*' \
+ -not -iname '*.a' \
+ -not -iname '*.la' \
+ -not -iname '*.h' \
+ -not -iname '*.c' \
+ -not -ipath '*/pkgconfig/*' \
+ -not -ipath '*/man/*' \
+ -not -ipath '*/doc/*' \
+ -not -ipath '*/docs/*' \
+ -not -iname 'README*' \
+ -not -iname 'INSTALL*' \
+ -not -iname '*.html' > /tmp/list
+ tar -T /tmp/list -cpzvf /tmp/${PACK_APP}.tar.gz
+ cd /tmp
+ rm -rf /tmp/pkg
+ mkdir /tmp/pkg
+ cd /tmp/pkg
+ tar -pxf /tmp/${PACK_APP}.tar.gz # unpack (install) the extension in tmp
+ rm -f /tmp/list
+ rm -f /tmp/${PACK_APP}.tar.gz
+ copy_additional_files
+ tcext_packtemp
 ;;
-unload)
-. $PACK_DIR/tcext.info
-tcext_unload "$PACK_APP"
+installdev)
+ require_info
+ $0 flags
+ echo 'building tcz extension'
+PACK_APP="${PACK_APP}-dev"
+ tcext_installtemp
+ [ ! -e /tmp/${PACK_APP}.tar.gz ] && rm -f /tmp/${PACK_APP}.tar.gz
+ [ ! -e /tmp/list ] && rm -f /tmp/list
+ cd /tmp/pkg
+ find -not -type d \
+ -ipath '*/include/*' \
+ -iname '*.a' \
+ -iname '*.la' \
+ -iname '*.h' \
+ -iname '*.c' \
+ -ipath '*/pkgconfig/*' > /tmp/list
+ tar -T /tmp/list -cpzvf /tmp/${PACK_APP}.tar.gz
+ cd /tmp
+ rm -rf /tmp/pkg
+ mkdir /tmp/pkg
+ cd /tmp/pkg
+ tar -pxf /tmp/${PACK_APP}.tar.gz # unpack (install) the extension in tmp
+ rm -f /tmp/list
+ rm -f /tmp/${PACK_APP}.tar.gz
+ # no copy additional files in dev
+ tcext_packtemp
 ;;
-load)
-. $PACK_DIR/tcext.info
-tcext_load
+installdocs)
+ require_info
+ $0 flags
+PACK_APP="${PACK_APP}-docs"
+ echo 'building tcz extension'
+ tcext_installtemp
+ [ ! -e /tmp/${PACK_APP}.tar.gz ] && rm -f /tmp/${PACK_APP}.tar.gz
+ [ ! -e /tmp/list ] && rm -f /tmp/list
+ cd /tmp/pkg
+ find -not -type d \
+ -ipath '*/man/*' \
+ -ipath '*/doc/*' \
+ -ipath '*/docs/*' \
+ -iname 'README*' \
+ -iname 'INSTALL*' \
+ -iname '*.html' > /tmp/list
+ tar -T /tmp/list -cpzvf /tmp/${PACK_APP}.tar.gz
+ rm -rf /tmp/pkg
+ mkdir /tmp/pkg
+ cd /tmp/pkg
+ tar -pxf /tmp/${PACK_APP}.tar.gz # unpack (install) the extension in tmp
+ rm -f /tmp/list
+ rm -f /tmp/${PACK_APP}.tar.gz
+ # no copy additional files in docs
+ tcext_packtemp
+;;
+installfull)
+ require_info
+ $0 flags
+ echo 'building tcz extension'
+ tcext_installtemp
+ tcext_packtemp
 ;;
 submit)
-. $PACK_DIR/tcext.info
-tcext_submit
+ require_info
+ tcext_submit
 ;;
 tools)
 TCE_DIR=`cat /opt/.tce_dir`
 
-[ -e $TCE_DIR/optional/compiletc.tcz ] && tce-load -i compiletc.tcz
-[ ! -e $TCE_DIR/optional/compiletc.tcz ] && tce-load -w -i compiletc.tcz
+loadtcz()
+{
+[ -e $TCE_DIR/optional/$1.tcz ] && tce-load -i $1.tcz
+[ ! -e $TCE_DIR/optional/$1.tcz ] && tce-load -w -i $1.tcz
+}
 
-[ -e $TCE_DIR/optional/python.tcz ] && tce-load -i python.tcz
-[ ! -e $TCE_DIR/optional/python.tcz ] && tce-load -w -i python.tcz
-
-[ -e $TCE_DIR/optional/openssl-1.0.0-dev.tcz ] && tce-load -i openssl-1.0.0-dev.tcz
-[ ! -e $TCE_DIR/optional/openssl-1.0.0-dev.tcz ] && tce-load -w -i openssl-1.0.0-dev.tcz
-
-[ -e $TCE_DIR/optional/squashfs-tools-4.x.tcz ] && tce-load -i squashfs-tools-4.x.tcz
-[ ! -e $TCE_DIR/optional/squashfs-tools-4.x.tcz ] && tce-load -w -i squashfs-tools-4.x.tcz
-
-[ -e $TCE_DIR/optional/strace.tcz ] && tce-load -i strace.tcz
-[ ! -e $TCE_DIR/optional/strace.tcz ] && tce-load -w -i strace.tcz
-
-[ -e $TCE_DIR/optional/pcre-dev.tcz ] && tce-load -i pcre-dev.tcz
-[ ! -e $TCE_DIR/optional/pcre-dev.tcz ] && tce-load -w -i pcre-dev.tcz
-
-[ -e $TCE_DIR/optional/libtool.tcz ] && tce-load -i libtool.tcz
-[ ! -e $TCE_DIR/optional/libtool.tcz ] && tce-load -w -i libtool.tcz
-
-[ -e $TCE_DIR/optional/pkg-config.tcz ] && tce-load -i pkg-config.tcz
-[ ! -e $TCE_DIR/optional/pkg-config.tcz ] && tce-load -w -i pkg-config.tcz
+loadtcz compiletc
+loadtcz python
+loadtcz openssl-1.0.0-dev
+loadtcz squashfs-tools-4.x
+loadtcz strace
+loadtcz pcre-dev
+loadtcz libtool
+loadtcz pkg-config
+loadtcz autoconf
 
 ;;
 "--help")
@@ -499,40 +596,84 @@ $0 help
 help)
 cat <<EOF
 usage:
-tcext all - all tasks are done one after another.
 tcext tools - tce-load compiletc and squashfs-tools and other development tools
 tcext init - crates tcext.info and shows an editor with the file
 tcext script - creates an init script with app's name to rename configuration
 tcext configure OPTIONS - does flags, and ./configure \$OPTIONS --prefix=/usr/local
 tcext make - does flags and make
-tcext install - does make install into a /tmp/pkg folder and puts the file.tcz in ./tcout folder
+tcext install - does installtemp, strips docs and dev, and does packtemp
+tcext installdocs - does installtemp, takes just docs, and does packtemp
+tcext installdev - does installtemp, takes just dev files, and does packtemp
 additional:
+tcext installfull - does installtemp, and does packtemp
 tcext flags - a shorthand to exports arch 486 flags... , when you do the ./configure and make manualy
-tcext build ARGS- does ./configure \$ARGS && tcext mak
 tcext deps - calculate dependencies in current folder
-tcext installhalf - does make install into a /tmp/pkg folder and copis tcfiles/* to /tmp/pkg
-tcext installfinish - allows split into sub pagages, it packages and puts the file.tcz in ./tcout folder
-tcext reload - copies tcfiles/* to /tmp/pkg, does installfinish, does unload, does load
+tcext installtemp - does make install into a /tmp/pkg folder and copis tcfiles/* to /tmp/pkg
+tcext packtemp - (allows split into sub pagages) it packages and puts the file.tcz in ./tcout folder
+tcext reload - copies tcfiles/* to /tmp/pkg, does packtemp, does unload, does load
+tcext loaddocs
+tcext unloaddocs
+tcext reloaddocs
+tcext loaddev
+tcext unloaddev
+tcext reloaddev
 tcext help - show this message
 EOF
 ;;
+
+load)
+ require_info
+ tcext_load
+;;
+unload)
+ require_info
+ tcext_unload "$PACK_APP"
+;;
 reload)
-. $PACK_DIR/tcext.info
+ require_info
+ copy_additional_files
+ tcext_packtemp
+ tcext_unload "$PACK_APP"
+ tcext_load
+;;
 
- if [ "`find $PACK_DIR/tcfiles/etc/init.d/ -type f -perm -og+rx`" == "" ] ; then
-  echo "please notice: there are non executable files in ./tcfiles/etc/init.d/..."
- fi
- # copy additional files
- cp  $PACK_DIR/tcfiles/* /tmp/pkg/ -r
- 
- $0 installfinish
- $0 unload
- $0 load
-
+loaddocs)
+ require_info
+PACK_APP="${PACK_APP}-docs"
+ tcext_load
+;;
+unloaddocs)
+ require_info
+PACK_APP="${PACK_APP}-docs"
+ tcext_unload "$PACK_APP"
+;;
+reloaddocs)
+ require_info
+PACK_APP="${PACK_APP}-docs"
+ $0 installdocs
+ tcext_unload "$PACK_APP"
+ tcext_load
+;;
+unloaddev)
+ require_info
+PACK_APP="${PACK_APP}-dev"
+ tcext_unload "$PACK_APP"
+;;
+loaddev)
+ require_info
+PACK_APP="${PACK_APP}-dev"
+ tcext_load
+;;
+reloaddev)
+ require_info
+PACK_APP="${PACK_APP}-dev"
+ $0 installdev
+ tcext_unload "$PACK_APP"
+ tcext_load
 ;;
 all)
  echo "tcext doing all tasks"
-. $PACK_DIR/tcext.info
+ require_info
  $0 build
  $0 install
 ;;
