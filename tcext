@@ -575,8 +575,8 @@ TCE_DIR=`cat /opt/.tce_dir`
 
 loadtcz()
 {
-[ -e $TCE_DIR/optional/$1.tcz ] && tce-load -i $1.tcz
-[ ! -e $TCE_DIR/optional/$1.tcz ] && tce-load -w -i $1.tcz
+[ -e $TCE_DIR/optional/$1.tcz ] && tce-load -l $1.tcz
+[ ! -e $TCE_DIR/optional/$1.tcz ] && tce-load -w -l $1.tcz
 }
 
 loadtcz compiletc
