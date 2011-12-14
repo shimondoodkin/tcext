@@ -573,21 +573,15 @@ submit)
 tools)
 TCE_DIR=`cat /opt/.tce_dir`
 
-loadtcz()
-{
-[ -e $TCE_DIR/optional/$1.tcz ] && tce-load -l $1.tcz
-[ ! -e $TCE_DIR/optional/$1.tcz ] && tce-load -w -l $1.tcz
-}
-
-loadtcz compiletc
-loadtcz python
-loadtcz openssl-1.0.0-dev
-loadtcz squashfs-tools-4.x
-loadtcz strace
-loadtcz pcre-dev
-loadtcz libtool
-loadtcz pkg-config
-loadtcz autoconf
+tce-load -wi compiletc
+tce-load -wi python
+tce-load -wi openssl-1.0.0-dev
+tce-load -wi squashfs-tools-4.x
+tce-load -wi strace
+tce-load -wi pcre-dev
+tce-load -wi libtool
+tce-load -wi pkg-config
+tce-load -wi autoconf
 
 ;;
 "--help")
