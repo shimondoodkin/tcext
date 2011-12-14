@@ -81,18 +81,6 @@ EOF
 \`;
 
 PACK_WHAT_I_DID_IS=\`cat <<EOF
-Modify and delete lines here. Also delete This line
-example:
-simple ./configure and make
-example:
-i downloaded tar.gz from  www.lighttpd.net/download/
-i extraxted it
-tcext init  # typed some values
-tcext configure --without-bzip2 -with-openssl
-tcext make
-cp ./doc/config/* to ./tcfiles/etc/lighttpd
-prepered my own init script in ./tcfiles/etc/init.d/lighttpd
-tcext install
 EOF
 \`;
 
