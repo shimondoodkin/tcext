@@ -34,8 +34,8 @@ APP="`echo \"$PWD\"|sed -r 's|^.*/(.+)-(.+)\$|\\1|'`"
 APPVER="`echo \"$PWD\"|sed -r 's|^.*/(.+)-(.+)\$|\\2|'`"
 [ "$APPVER" == "" ] && APPVER="1.4.29"
 
-WEBSITE="`cat README*|grep -i project|grep -v /rfc/|grep 'http://'|head -n 1|sed -r 's|^.*(http://[a-zA-Z./]+).*\$|\\1|'`"
-[ "$WEBSITE" == "" ] && WEBSITE="`cat README*|grep -v /rfc/ |grep 'http://'|head -n 1|sed -r 's|^.*(http://[a-zA-Z./]+).*\$|\\1|'`"
+WEBSITE="`cat README*|grep -i project|grep -v /rfc/|grep 'http://'|head -n 1|sed -r 's|^.*(http://[0-9a-zA-Z./-]+).*\$|\\1|'`"
+[ "$WEBSITE" == "" ] && WEBSITE="`cat README*|grep -v /rfc/ |grep 'http://'|head -n 1|sed -r 's|^.*(http://[0-9a-zA-Z./-]+).*\$|\\1|'`"
 [ "$WEBSITE" == "" ] && WEBSITE="http://lighttpd.com"
 
 
@@ -593,32 +593,51 @@ tcext installfull - does installtemp, and does packtemp
 tcext flags - a shorthand to exports arch 486 flags... , when you do the ./configure and make manualy
 tcext deps - calculate dependencies in current folder
 tcext installtemp - does make install into a /tmp/pkg folder and copis tcfiles/* to /tmp/pkg
-tcext packtemp - (allows split into sub pagages) it packages and puts the file.tcz in ./tcout folder
+tcext packtemp - it packages /tmp/pkg and puts the file.tcz in ./tcout folder
 tcext reload - copies tcfiles/* to /tmp/pkg, does packtemp, does unload, does load
-tcext loaddocs
-tcext unloaddocs
-tcext reloaddocs
-tcext loaddev
-tcext unloaddev
-tcext reloaddev
+tcext load, tcext unload
+tcext loaddocs, tcext unloaddocs, tcext reloaddocs
+tcext loaddev, tcext unloaddev, tcext reloaddev
+utility:
+tcext load package-name
+tcext unload package-name
 tcext help - show this message
 EOF
 ;;
 
 load)
- require_info
- tcext_load
+ if [ "$2" != "" ]; then
+PACK_APP=$2
+  tce-load -wi "$PACK_APP"
+ else
+  require_info
+  tcext_load
+ fi
+;;
+unload_helper)
+ tcext_unload "$2"
 ;;
 unload)
- require_info
- tcext_unload "$PACK_APP"
+ if [ "$2" != "" ]; then
+PACK_APP=$2
+  sudo $0 unload_helper "$PACK_APP"
+ else
+  require_info
+  sudo $0 unload_helper "$PACK_APP"
+ fi
 ;;
 reload)
- require_info
- copy_additional_files
- tcext_packtemp
- tcext_unload "$PACK_APP"
- tcext_load
+ if [ "$2" != "" ]; then
+PACK_APP=$2
+  sudo $0 unload_helper "$PACK_APP"
+  tce-load -wi "$PACK_APP"
+ else
+  require_info
+  copy_additional_files
+  tcext_packtemp
+  sudo $0 unload_helper "$PACK_APP"
+  tcext_load
+ fi
 ;;
 
 loaddocs)
@@ -629,13 +648,14 @@ PACK_APP="${PACK_APP}-docs"
 unloaddocs)
  require_info
 PACK_APP="${PACK_APP}-docs"
- tcext_unload "$PACK_APP"
+ sudo $0 unload_helper "$PACK_APP"
+
 ;;
 reloaddocs)
  require_info
 PACK_APP="${PACK_APP}-docs"
  $0 installdocs
- tcext_unload "$PACK_APP"
+ sudo $0 unload_helper "$PACK_APP"
  tcext_load
 ;;
 loaddev)
@@ -646,13 +666,14 @@ PACK_APP="${PACK_APP}-dev"
 unloaddev)
  require_info
 PACK_APP="${PACK_APP}-dev"
- tcext_unload "$PACK_APP"
+ sudo $0 unload_helper "$PACK_APP"
+
 ;;
 reloaddev)
  require_info
 PACK_APP="${PACK_APP}-dev"
  $0 installdev
- tcext_unload "$PACK_APP"
+ sudo $0 unload_helper "$PACK_APP"
  tcext_load
 ;;
 all)
