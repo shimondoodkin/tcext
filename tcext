@@ -417,6 +417,15 @@ EDIT=$1
 . $PACK_DIR/tcext.info
 }
 
+TCE_DIR=`cat /opt/.tce_dir`
+
+loadtcz()
+{
+[ -e $TCE_DIR/optional/$1.tcz ] && tce-load -i $1.tcz
+[ ! -e $TCE_DIR/optional/$1.tcz ] && tce-load -w -i $1.tcz
+}
+
+
 case "${1}" in
 init)
 require_info 1
@@ -560,18 +569,17 @@ submit)
  tcext_submit
 ;;
 tools)
-TCE_DIR=`cat /opt/.tce_dir`
 
-tce-load -wi compiletc
-tce-load -wi python
-tce-load -wi openssl-1.0.0-dev
-tce-load -wi squashfs-tools-4.x
-tce-load -wi strace
-tce-load -wi pcre-dev
-tce-load -wi libtool
-tce-load -wi pkg-config
-tce-load -wi autoconf
-tce-load -wi automake
+loadtcz compiletc
+loadtcz python
+loadtcz openssl-1.0.0-dev
+loadtcz squashfs-tools-4.x
+loadtcz strace
+loadtcz pcre-dev
+loadtcz libtool
+loadtcz pkg-config
+loadtcz autoconf
+loadtcz automake
 
 ;;
 "--help")
@@ -608,7 +616,7 @@ EOF
 load)
  if [ "$2" != "" ]; then
 PACK_APP=$2
-  tce-load -wi "$PACK_APP"
+  loadtcz "$PACK_APP"
  else
   require_info
   tcext_load
@@ -630,7 +638,7 @@ reload)
  if [ "$2" != "" ]; then
 PACK_APP=$2
   sudo $0 unload_helper "$PACK_APP"
-  tce-load -wi "$PACK_APP"
+  loadtcz "$PACK_APP"
  else
   require_info
   copy_additional_files
