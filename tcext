@@ -219,7 +219,7 @@ PACK_DEPS="`tcext_deps`";
 [ ! -e $PACK_DIR/tcout ] && mkdir $PACK_DIR/tcout   # here you receive the result
 
 # make file list for the extension
-find | sed 's/^..//' | sed '/^\.$/d' > $PACK_DIR/tcout/$PACK_APP.tcz.list # remove first 2 chars and the dot file
+find -type f | sed 's/^..//' | sed '/^\.$/d' > $PACK_DIR/tcout/$PACK_APP.tcz.list # remove first 2 chars and the dot file
 
 #make loadable file system image file
 cd /tmp
@@ -507,6 +507,7 @@ installdev)
  require_info
  $0 flags
  echo 'building tcz extension'
+PACK_ADD_DEPS="$PACK_ADD_DEPS\n${PACK_APP}.tcz"
 PACK_APP="${PACK_APP}-dev"
  tcext_installtemp
  [ ! -e /tmp/${PACK_APP}.tar.gz ] && rm -f /tmp/${PACK_APP}.tar.gz
@@ -534,6 +535,7 @@ PACK_APP="${PACK_APP}-dev"
 installdocs)
  require_info
  $0 flags
+PACK_ADD_DEPS="$PACK_ADD_DEPS\n${PACK_APP}.tcz"
 PACK_APP="${PACK_APP}-docs"
  echo 'building tcz extension'
  tcext_installtemp
