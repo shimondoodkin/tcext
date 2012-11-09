@@ -579,6 +579,7 @@ loadtcz squashfs-tools-4.x
 loadtcz strace
 loadtcz pcre-dev
 loadtcz libtool
+loadtcz libtool-dev
 loadtcz pkg-config
 loadtcz autoconf
 loadtcz automake
