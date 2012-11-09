@@ -8,54 +8,69 @@ A tutorial how to make an extension
 
 This script makes your life simpler
 Now you have time to Describe your work, Reread the extention info, and Make more extensions
-
-Written by Shimon Doodkin helpmepro1@gmail.com doodkin.com
-
-Contributors:
- You here - fork and modify https://github.com/shimondoodkin/tcext/
  
-Lisence: MIT
-
-Installation:
-#you need curl extension
-tce-load -wi curl.tcz
-#put tcext file in ~/.local/bin/tcext
-mkdir -p ~/.local/bin/
-curl --insecure https://raw.github.com/shimondoodkin/tcext/master/tcext -o /home/tc/.local/bin/tcext
-#make it executible 
-chmod +x ~/.local/bin/tcext
-
-# development-note: clone the repository and make a link to tcext in repo instead of putting a file there
-# to develop this project you need an account in github, then you can open a file and click "Fork and edit this file", and send pull request
-
 I have developed an extension creation script
 I hope I did not reinvented the wheel
 
-Easy as:
-cd /project_folder
+Easy as sequance of commands:
+
+   wget http://somewebsite.com/downloaded_app_source.tar.gz
+   tar -vxf cd downloaded_app_source.tar.gz
+   cd downloaded_app_source
+
    tcext tools    # loads extensions required to compile programs
    
    tcext info    #creates or edits tcext.info file in current directory
    tcext configure --option     # same as ./configure --option
-   tcext make    # same as #make
+   tcext make    # same as #make but with cpu options 
 
-#put additional extension files in ./tcfiles, ex: tcfiles/etc/settings.conf.sample
+   #put additional extension files in ./tcfiles, ex: tcfiles/etc/settings.conf.sample
 
-#make an init script (to copy /etc/settings.conf.sample to /etc/settings.conf):
+   #make an init script (to copy /etc/settings.conf.sample to /etc/settings.conf):
 
-   tcext script    # to edit the init script
+   tcext script    # to edit/create the init script
    tcext install    # same as #make install
-#see the result tcz in ./tcout
+   #at this point you can see the result tcz in ./tcout
 
-#additionally you can use load / unload / reload to test your work
+   #additionally you can use load / unload / reload to test your work
    tcext load    # copies the tcz to tce/optional and loads it
-#also you can do
+
+Basicaly you are done!
+
+   #also you can do
    tcext unload    # tries to unload the extention
 
-# when you develop your extension, and you need to modify a file in ./tcfiles, you can do:
+   # when you develop your extension, and you need to modify a file in ./tcfiles, you can do:
    tcext reload    # re-copies ./tcfiles ,  makes package, unloads, loads
-#now you can try your extension again  ;)
+   #now you can try your extension again  ;)
 
-#before publishing make sure to run info again
+   #before publishing make sure to run info again
    tcext info    #creates or edits tcext.info file in current directory
-#and redo all the installs:tcext install ,tcext installdocs, tcext installdev
+   #and redo all the installs:  tcext install ,tcext installdocs, tcext installdev
+
+
+Installation:
+~~~~~~
+to download you need curl extension
+
+    tce-load -wi curl.tcz
+
+put tcext file in ~/.local/bin/tcext
+
+    mkdir -p ~/.local/bin/
+    curl --insecure https://raw.github.com/shimondoodkin/tcext/master/tcext -o /home/tc/.local/bin/tcext
+
+make it executible 
+
+    chmod +x ~/.local/bin/tcext
+
+development-note: clone the repository and make a link to tcext in repo instead of putting a file there
+to develop this project you need an account in github, then you can open a file and click "Fork and edit this file", and send pull request
+
+Lisence: MIT/GPL
+Written by Shimon Doodkin helpmepro1@gmail.com doodkin.com
+Contributors:
+ You here - fork and modify https://github.com/shimondoodkin/tcext/
+
+
+
